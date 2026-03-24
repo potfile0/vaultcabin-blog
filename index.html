@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building and Securing a Self-Hosted Cloud from Scratch | VaultCabin</title>
+    <meta name="description" content="A deep dive into building, threat modeling, and hardening a self-hosted cloud infrastructure using STRIDE methodology">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #151a23;
+            --bg-tertiary: #1f2937;
+            --text-primary: #e6e8eb;
+            --text-secondary: #a8adb8;
+            --text-muted: #6b7280;
+            --accent-primary: #3b82f6;
+            --accent-secondary: #8b5cf6;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --border-color: #2d3748;
+            --code-bg: #1a1f2e;
+            --selection-bg: #3b82f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        ::selection {
+            background: var(--selection-bg);
+            color: white;
+        }
+
+        body {
+            font-family: 'Crimson Pro', Georgia, serif;
+            font-size: 19px;
+            line-height: 1.7;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 32px 0;
+            margin-bottom: 64px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            background: rgba(21, 26, 35, 0.9);
+        }
+
+        .site-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--accent-primary);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        /* Article Header */
+        .article-header {
+            margin-bottom: 64px;
+            padding-bottom: 48px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-size: 56px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        .article-meta {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 32px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .meta-item::before {
+            content: "→";
+            color: var(--accent-primary);
+        }
+
+        .tags {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+
+        .tag {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+            padding: 6px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .tag:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        .lead {
+            font-size: 24px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin: 32px 0;
+            padding-left: 24px;
+            border-left: 3px solid var(--accent-primary);
+        }
+
+        /* Typography */
+        h2 {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-size: 40px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 80px 0 32px 0;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+        }
+
+        h3 {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 600;
+            line-height: 1.3;
+            margin: 56px 0 24px 0;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+        }
+
+        h4 {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin: 40px 0 20px 0;
+            color: var(--text-primary);
+        }
+
+        p {
+            margin-bottom: 24px;
+            color: var(--text-secondary);
+        }
+
+        strong {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        em {
+            font-style: italic;
+            color: var(--text-primary);
+        }
+
+        a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        a:hover {
+            border-bottom-color: var(--accent-primary);
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 24px 0;
+            padding-left: 32px;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 12px;
+            line-height: 1.7;
+        }
+
+        /* Code Blocks */
+        code {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 16px;
+            background: var(--code-bg);
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: var(--accent-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin: 32px 0;
+            overflow-x: auto;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 32px 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        thead {
+            background: var(--bg-tertiary);
+        }
+
+        th {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-weight: 600;
+            text-align: left;
+            padding: 16px 20px;
+            color: var(--text-primary);
+            font-size: 16px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        td {
+            padding: 14px 20px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 17px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        /* Blockquotes */
+        blockquote {
+            margin: 32px 0;
+            padding: 24px 32px;
+            background: var(--bg-secondary);
+            border-left: 4px solid var(--accent-primary);
+            border-radius: 0 8px 8px 0;
+            color: var(--text-secondary);
+            font-size: 20px;
+            line-height: 1.6;
+        }
+
+        /* Images */
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 32px 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .img-caption {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: -24px;
+            margin-bottom: 32px;
+        }
+
+        /* Horizontal Rule */
+        hr {
+            border: none;
+            height: 1px;
+            background: var(--border-color);
+            margin: 64px 0;
+        }
+
+        /* Callout Boxes */
+        .callout {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-warning);
+            border-radius: 8px;
+            padding: 24px 28px;
+            margin: 32px 0;
+        }
+
+        .callout.info {
+            border-left-color: var(--accent-primary);
+        }
+
+        .callout.success {
+            border-left-color: var(--accent-success);
+        }
+
+        .callout.danger {
+            border-left-color: var(--accent-danger);
+        }
+
+        .callout-title {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        /* Section Dividers */
+        .section-number {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            color: var(--accent-primary);
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: 1px;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 120px;
+            padding: 48px 0;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            color: var(--text-muted);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+        }
+
+        /* Scroll Progress Bar */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            width: 0%;
+            z-index: 1000;
+            transition: width 0.1s ease;
+        }
+
+        /* Table of Contents */
+        .toc {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 32px;
+            margin: 48px 0;
+        }
+
+        .toc-title {
+            font-family: 'Schibsted Grotesk', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .toc li {
+            margin-bottom: 10px;
+        }
+
+        .toc a {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 15px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+            display: block;
+        }
+
+        .toc a:hover {
+            color: var(--accent-primary);
+            border-bottom: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 40px;
+            }
+
+            h2 {
+                font-size: 32px;
+            }
+
+            h3 {
+                font-size: 24px;
+            }
+
+            body {
+                font-size: 18px;
+            }
+
+            .lead {
+                font-size: 21px;
+            }
+
+            pre {
+                padding: 16px;
+                font-size: 14px;
+            }
+
+            table {
+                font-size: 15px;
+            }
+
+            th, td {
+                padding: 12px 16px;
+            }
+        }
+
+        /* Sensitive Info Redaction Style */
+        .redacted {
+            background: var(--accent-danger);
+            color: transparent;
+            user-select: none;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .redacted::selection {
+            background: var(--accent-danger);
+            color: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+
+    <header>
+        <div class="container">
+            <a href="/" class="site-title">blog.vaultcabin.com</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <article>
+            <div class="article-header">
+                <h1>Building and Securing a Self-Hosted Cloud from Scratch</h1>
+                
+                <p class="lead">
+                    This project is about learning by doing. I explored how to build my own infrastructure, understand possible threats, and see what is really needed to make a self-hosted system more secure.
+                </p>
+
+                <div class="article-meta">
+                    <div class="meta-item">Author: sanskar</div>
+                    <div class="meta-item">Published: March 2026</div>
+                    <div class="meta-item">15 min read</div>
+                </div>
+
+                <div class="tags">
+                    <span class="tag">self-hosted</span>
+                    <span class="tag">security</span>
+                    <span class="tag">homelab</span>
+                    <span class="tag">STRIDE</span>
+                    <span class="tag">docker</span>
+                    <span class="tag">offensive-security</span>
+                </div>
+            </div>
+
+            <div class="toc">
+                <div class="toc-title">Table of Contents</div>
+                <ul>
+                    <li><a href="#why">1. Why I Did This</a></li>
+                    <li><a href="#what-i-built">2. What I Built</a></li>
+                    <li><a href="#architecture">3. The Architecture</a></li>
+                    <li><a href="#naive-state">4. The Naive State — Before Hardening</a></li>
+                    <li><a href="#threat-modeling">5. Threat Modelling and Hardening</a></li>
+                    <li><a href="#accepted-risks">6. Accepted Risks</a></li>
+                    <li><a href="#security-testing">7. Security Testing — Real Results</a></li>
+                    <li><a href="#monitoring">8. Monitoring and Alerting</a></li>
+                    <li><a href="#still-broken">9. What I Know Is Still Broken</a></li>
+                    <li><a href="#learned">10. What I Learned</a></li>
+                    <li><a href="#references">References and Tools Used</a></li>
+                </ul>
+            </div>
+
+            <section id="why">
+                <div class="section-number">SECTION 01</div>
+                <h2>Why I Did This</h2>
+                
+                <p>How much of your data do you actually own? Not just store, but own. It is more than likely that your data is stored, managed and made available for your convenience by someone else. For most people, it's either Google, Apple or some other SaaS giant. I get it. It is convenient to use their cloud services, they are reliable, well maintained and the security team behind them are some of the world's best engineers, and you trust them.</p>
+
+                <p>I wanted to understand what it really takes to build my own setup for secure cloud storage. Like, how it actually looks when you run everything by yourself, where the data is really stored, and also what you lose when you just give all this responsibility to some other company.</p>
+
+                <p>I'm a Cybersec student and I've always been drawn to the offensive side of security. And, to build a system that holds real critical data and validating the threat model through offensive techniques was a good way to understand how security actually works in practice. I had a decent background in Linux and networking but I didn't have a clear picture of how deep securing an infrastructure actually gets or even if I could truly secure it at all. I was excited. Probably a bit overconfident too.</p>
+
+                <p><strong>That didn't last long.</strong></p>
+            </section>
+
+            <hr>
+
+            <section id="what-i-built">
+                <div class="section-number">SECTION 02</div>
+                <h2>What I Built</h2>
+
+                <p>I ran this entire thing on my personal PC. I used all open source projects minimizing vendor lock-in. I chose Nextcloud as the private cloud storage option, Vaultwarden as password manager (Bitwarden compatible), Nginx proxy manager as reverse proxy, MariaDB for Nextcloud database, Grafana for dashboard, Prometheus with Node Exporter and cAdvisor for host and container metrics, Promtail to collect and ship logs to Loki and Watchtower for automated container updates (which I later realized would be a massive supply chain risk).</p>
+
+                <p>I bought a domain "vaultcabin.com" from Namecheap for $6 (got 50% discount) per year, set up a free Cloudflare account, and pointed the DNS to Cloudflare so all traffic hits their network first. Since I was on my university network with no inbound connections allowed, I ran cloudflared to set up a Cloudflare Tunnel, an outbound only encrypted tunnel from my server to Cloudflare's edge proxying HTTP requests over a secure websocket/QUIC stream, which then routes traffic down to Nginx Proxy Manager.</p>
+
+                <p>All in all, I was aiming for a secure file storage and password manager. I was aware that once I put my real passwords in Vaultwarden, the stakes would not just be educational anymore.</p>
+
+                <h3>Hardware</h3>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Spec</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>RAM</td>
+                            <td>32GB DDR4</td>
+                        </tr>
+                        <tr>
+                            <td>Storage</td>
+                            <td>2TB NVMe SSD</td>
+                        </tr>
+                        <tr>
+                            <td>OS</td>
+                            <td>Ubuntu 24.04 LTS</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>The Stack</h3>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Nextcloud</td>
+                            <td>Private cloud storage</td>
+                        </tr>
+                        <tr>
+                            <td>Vaultwarden</td>
+                            <td>Password manager</td>
+                        </tr>
+                        <tr>
+                            <td>Nginx Proxy Manager</td>
+                            <td>Reverse proxy</td>
+                        </tr>
+                        <tr>
+                            <td>MariaDB</td>
+                            <td>Nextcloud database</td>
+                        </tr>
+                        <tr>
+                            <td>Grafana</td>
+                            <td>Dashboards and alerting</td>
+                        </tr>
+                        <tr>
+                            <td>Prometheus</td>
+                            <td>Metrics collection</td>
+                        </tr>
+                        <tr>
+                            <td>Loki + Promtail</td>
+                            <td>Log aggregation</td>
+                        </tr>
+                        <tr>
+                            <td>Watchtower</td>
+                            <td>Automated image updates</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <hr>
+
+            <section id="architecture">
+                <div class="section-number">SECTION 03</div>
+                <h2>The Architecture</h2>
+
+                <p>Since I was on a university network with no option for inbound connections, I couldn't just open ports and forward traffic. The university firewall was dropping every inbound packet, so I needed a way to receive traffic without opening any port.</p>
+
+                <p>I used a <strong>Cloudflare Tunnel</strong> to do that. Instead of waiting for connections, my server reaches out first, an outbound connection to Cloudflare's edge, initiated and maintained by <code>cloudflared</code>, a daemon running on my machine. When someone hits vaultcabin.com, Cloudflare receives the request and pushes it back down that existing tunnel to my server. No open ports, no exposed IP, the university firewall doesn't even know it's happening.</p>
+
+                <p>Traffic from the browser hits Cloudflare's edge over HTTPS where TLS terminates, meaning Cloudflare decrypts it, runs it through WAF and DDoS filtering, then re-encrypts it through the tunnel back to my server. Inside the machine, cloudflared hands it off to Nginx Proxy Manager over plain HTTP on an internal Docker network. The traffic never leaves the machine, so it's an accepted tradeoff. TLS terminating at Cloudflare and Cloudflare being able to read my traffic wasn't something I was initially comfortable with, but I had no real alternative. I didn't have the capacity to run my own WAF or absorb DDoS traffic, and a large portion of the internet operates this way anyway. I did enable Full Strict SSL in Cloudflare which ensures the tunnel back to my server uses a validated certificate, so at minimum the leg between Cloudflare and my machine isn't plain HTTP over the wire. I documented it, understood what I was giving up, and accepted the rest as residual risk.</p>
+
+                <p>For segmented routing, I set up two separate Docker networks. Nginx sits on the <code>selfhosted</code> subnet (172.20.0.0/24) by itself. Everything else, Nextcloud, Vaultwarden, MariaDB, Grafana, the whole stack, sits on the <code>backend</code> subnet (172.21.0.0/24). The idea is that if backend container gets compromised, the attacker is contained to that subnet and can't directly move towards Nginx, cloudflared or host. Nginx has one foot in both networks since it needs to proxy traffic to backend services, a known tradeoff I'll get into later.</p>
+
+                <p>The whole point was to build something I could actually access from anywhere, not just from home, without exposing my real IP or opening a single port on a network I don't control. By this point I already had a good sense that this project was going to be full of tradeoffs, some by choice, some forced on me. I couldn't perfectly secure everything, and honestly that ended up reinforcing something I'd read about but never really felt until now: <strong>No machine is 100% secure on the internet and I have to take Security as a process and not a State.</strong></p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/excalidraw.png" alt="VaultCabin Architecture Diagram" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: VaultCabin System Architecture</div>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="naive-state">
+                <div class="section-number">SECTION 04</div>
+                <h2>The Naive State — Before Hardening</h2>
+
+                <p>The architecture above didn't always look like it does now. Before any hardening, every container, every config file, everything was running on defaults. I genuinely could not comprehend the number of attack vectors that opens up until I started going through each component one by one. Default configurations are optimized for usability and compatibility, not security. That became very obvious very fast.</p>
+
+                <h3>Network Exposure</h3>
+
+                <p>All containers were on a single flat Docker network with no segmentation whatsoever. A compromised Nginx container had direct network access to MariaDB, Vaultwarden, Prometheus, everything. No lateral movement needed, they were all just sitting next to each other.</p>
+
+                <p>No HSTS configured, meaning SSL stripping was possible. A user types vaultcabin.com, browser makes that first plain HTTP request before redirecting to HTTPS, attacker sitting in the middle intercepts it and serves plain HTTP forever. Credentials going out in plaintext and the user would never know.</p>
+
+                <p>No security headers anywhere. No <code>X-Content-Type-Options</code>, no <code>X-Frame-Options</code>, no content security policy. Cloudflare IP ranges weren't configured in Nginx either, meaning Fail2ban was reading the Docker gateway IP as the source of all traffic and banning Cloudflare's own IPs instead of real attackers. Essentially self inflicted denial of service on my own infrastructure the moment Fail2ban triggered.</p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/Networksegmentation-nginxpublic,allotherprivate.png" alt="Network Segmentation After Hardening" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Network Segmentation - Nginx Public, Backend Private</div>
+                </div>
+
+                <h3>Access Control and Authentication</h3>
+
+                <p>SSH was sitting on port 22, the first port every automated scanner on the internet checks. Password authentication was enabled, meaning anyone could just start guessing credentials. No login attempt limits, no lockouts, nothing stopping a basic credential stuffing script from running forever against it.</p>
+
+                <p>Nginx Proxy Manager's admin panel was sitting on port 81, publicly accessible, with default credentials of <code><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e081848d898ea08598818d908c85ce838f8d">[email&#160;protected]</a></code> and <code>changeme</code>. That panel controls every proxy host, every SSL certificate, every access rule for the entire infrastructure. Anyone who found it could redirect domains, strip SSL, expose internal services or just lock me out completely. It wasn't just an open door, it was the master key to everything.</p>
+
+                <p>No rate limiting on any service, public facing or internal. Nextcloud login, Vaultwarden login, all of it wide open to unlimited requests. No defense against brute force, no defense against someone hammering the login page with a wordlist all day. And beyond brute force, no rate limiting also means no defense against volumetric abuse. Someone could flood my services with junk requests and take everything down.</p>
+
+                <p>MariaDB had <code>root@%</code> configured, meaning remote root login was possible from any host. Default root password, no connection limits, no query restrictions, <code>local_infile</code> enabled meaning an attacker with SQL access could potentially read files off the host filesystem.</p>
+
+                <h3>Information Disclosure</h3>
+
+                <p>Nextcloud's <code>/status.php</code> was exposing the exact version number publicly with zero authentication. Version <span class="redacted">[REDACTED]</span>, visible to anyone who just hit that endpoint. That's a direct CVE lookup attack chain, no scanning needed. Hit the endpoint, get the version, search CVE database, know exactly what to try.</p>
+
+                <p>PHP version was leaking in HTTP headers, <code>x-powered-by: PHP/<span class="redacted">[REDACTED]</span></code> visible on every response. Same attack chain as the Nextcloud version, exact version visible, CVE database searchable, exploits mappable.</p>
+
+                <h3>Application Vulnerabilities</h3>
+
+                <p>ImageMagick (helper tool for Nextcloud) was fully unprotected and being used for all thumbnail generation. There were active CVEs including arbitrary code execution. Attack scenario is simple, upload a malicious image, Nextcloud passes it to ImageMagick for thumbnail processing, code execution inside the container. No format restrictions, no policy, nothing.</p>
+
+                <p>Vaultwarden's <code>db.sqlite3</code> and <code>rsa_key.pem</code> had default permissions of 644, world readable. Any local user on the machine could copy both files and attempt offline vault decryption. The database has all encrypted passwords, the key file is what decrypts them. In this state, a local compromise of any container on the host provided a trivial path to full credential exfiltration.</p>
+
+                <h3>Host and Container Security</h3>
+
+                <p>Containers were running with no capability restrictions. Docker gives containers a default set of Linux capabilities and nobody was dropping any of them. <code>cloudflared</code> was running as root on top of that, meaning a vulnerability in the tunnel daemon meant immediate full system compromise, not just a contained escape.</p>
+
+                <p>Grafana's data directory was world writable at 777 and <code>grafana.db</code> was group readable. That database contains dashboards, users, data sources, API keys and alert rules. Anyone with access to this could map my infrastructure's topology with ease.</p>
+
+                <h3>Visibility and Recovery</h3>
+
+                <p>No centralised logging, no alerts, no monitoring. Logs scattered across individual containers with no way to correlate anything. An attacker could have been inside the network for days and there was no mechanism to detect it. I had zero visibility.</p>
+
+                <p>No backups. If anything went wrong, digitally or physically, the entire point of the project collapses. Files gone, passwords gone, no recovery path whatsoever.</p>
+
+                <div class="callout danger">
+                    <div class="callout-title">Every single one of these was a default.</div>
+                    <p>Nobody configured them to be insecure, they just shipped that way because 'this should work and not break' was the priority when these tools were built. Going through each one of these is what the rest of this post is about.</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="threat-modeling">
+                <div class="section-number">SECTION 05</div>
+                <h2>Threat Modelling and Hardening</h2>
+
+                <p>Once the infrastructure was running, I used <strong>STRIDE</strong>, a threat modelling framework that gives you six categories to think through for every component. Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service and Elevation of Privilege to systematically secure the infrastructure.</p>
+
+                <p>I went through all ten components. Cloudflare Tunnel, Nginx Proxy Manager, Nextcloud, Vaultwarden, MariaDB, Grafana, Prometheus, SSH, UFW and the Docker network layer. Sixty threat categories total. I went component by component, found the threats, fixed them on the spot and moved on.</p>
+
+                <h3>SSH</h3>
+
+                <p>First thing I touched. SSH on port 22 is background noise on the internet, every automated scanner hits it. Moved it to another port, not because obscurity is real security, but it drops off automated scan results on port 22 atleast and cuts log noise significantly.</p>
+
+                <p>Password authentication off completely. Key only, Ed25519. Modern elliptic curve, smaller keys, faster, more secure than RSA. Private key is passphrase protected so even if someone gets the file, they still need the passphrase to use it. <code>PermitRootLogin no</code>, <code>AllowUsers user</code>, no forwarding of any kind. <code>LoginGraceTime 30s</code> so half open connections don't linger. <code>DebugBanner no</code> strips the Ubuntu build string from the SSH banner so the OS isn't advertised on connection.</p>
+
+                <h3>Kernel Parameters</h3>
+
+                <p>I tweaked a few sysctl parameters that actually mattered.</p>
+
+                <p><code>kptr_restrict=2</code> hides kernel pointer addresses from everyone including root. Makes it significantly harder to build exploits against kernel vulnerabilities because the attacker can't read memory addresses. This is what confused Nmap's OS fingerprinting during testing. I found this quite funny that it reported Linux 5.0-5.7 when the actual kernel was something else. Kernel hardening actively defeating reconnaissance tools without me doing anything extra.</p>
+
+                <p>ICMP redirects disabled. They can be used to manipulate routing tables and redirect traffic through an attacker controlled path. <code>rp_filter</code> enabled to drop packets with spoofed source IPs. SYN flood protection via <code>tcp_syncookies</code>. ASLR verified enabled which randomizes memory layout making exploitation unreliable. Swap disabled so sensitive data like passwords and keys never gets written to disk as I have enough headroom RAM for my server.</p>
+
+                <h3>Docker Containers</h3>
+
+                <p>Every container got <code>cap_drop: ALL</code> with only the minimum capabilities added back. By default Docker gives containers capabilities they don't need. Dropping everything and adding back only what's required means if a container is compromised, the blast radius is as small as possible.</p>
+
+                <p><code>no-new-privileges: true</code> across everything. Prevents processes inside a container from gaining more privileges than they started with, even if they find a SUID binary inside.</p>
+
+                <p><code>cloudflared</code> was running as root. That's the entry point for all external traffic and a vulnerability there running as root means full system compromise, not a contained escape. Created a dedicated unprivileged system user and moved it there. Resource limits added to containers that were missing them. A attacked container with no limits can consume everything and bring the whole stack down.</p>
+
+                <h3>Nginx and Rate Limiting</h3>
+
+                <p>The admin panel was sitting on port 81 with default credentials, publicly accessible. That panel controls every proxy host, SSL certificate and access rule for the entire infrastructure. Removed it from the public tunnel entirely. Now only reachable via SSH tunnel from localhost.</p>
+
+                <p>Rate limiting zones were defined but never actually applied to login endpoints. Applied 3 requests per minute to Nextcloud and Vaultwarden login endpoints, with a burst of 3. After that, 429 for every other request.</p>
+
+                <p>Login protection ended up being three layers deep:</p>
+
+                <pre><code>Layer 1: Nginx rate limiting (429 after burst)
+Layer 2: Application built-in throttling
+Layer 3: Fail2ban IP ban after threshold</code></pre>
+
+                <p><code>/status.php</code> blocked so Nextcloud version is no longer publicly queryable. <code>proxy_hide_header X-Powered-By</code> so PHP version stops leaking. <code>block-exploits.conf</code> blocking common sensitive paths like <code>/.env</code>, <code>/.git/config</code>, <code>/nginx-status</code>.</p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/nginx-after-less-perm.png" alt="Nginx File Permissions After Hardening" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Nginx Configuration Files - Owner Read Only (chmod 600)</div>
+                </div>
+
+                <h3>Fail2ban</h3>
+
+                <p>Eight jails total covering SSH, Nginx, Nextcloud, Vaultwarden, Grafana and others. The critical fix here was that Fail2ban was banning Cloudflare's own IPs instead of real attackers. Nginx was logging the Docker gateway IP as the traffic source so every ban was landing on the wrong IP, essentially a self inflicted denial of service on my own infrastructure every time it triggered. Felt like I was in a rabbit hole but finally fixed by configuring Nginx to read the <code>CF-Connecting-IP</code> header Cloudflare passes through. Bans now land on actual attacker IPs.</p>
+
+                <p>Nextcloud needed its own custom jail. Nextcloud returns HTTP 200 even on failed logins, with the error in the response body. Standard jails looked for HTTP 401, so they were completely blind to every failed Nextcloud login attempt. Set up a custom regex filter to fix this.</p>
+
+                <h3>TLS and Security Headers</h3>
+
+                <p>TLS 1.0 and 1.1 disabled in Cloudflare, minimum TLS 1.2 enforced. This is what moved the testssl.sh grade from B to A.</p>
+
+                <p>HSTS configured with a six month max-age and <code>includeSubDomains</code>. Tells browsers to never make a plain HTTP request to vaultcabin.com or any subdomain for the next six months. Prevents SSL stripping where an attacker intercepts that first unencrypted request before the redirect to HTTPS kicks in.</p>
+
+                <p>CAA DNS records added restricting certificate issuance to Let's Encrypt only. Even if someone social engineers another certificate authority, they can't issue a valid cert for vaultcabin.com. <code>X-Content-Type-Options: nosniff</code> added to stop MIME type sniffing attacks.</p>
+
+                <h3>Vaultwarden</h3>
+
+                <p>This was one of the most alarming finding in the entire project. <code>db.sqlite3</code> and <code>rsa_key.pem</code> both had default permissions of 644 — world readable. The database contains every encrypted password. The key file is what decrypts them. Having both readable means any local user on the machine could copy both files and attempt full offline vault decryption with zero evidence of access. Fixed both to <code>chmod 600</code>.</p>
+
+                <p><code>/admin</code> panel found publicly reachable during testing. Blocked externally via Nginx. Now only accessible through an SSH tunnel, traffic never touches the internet.</p>
+
+                <p>Vaultwarden doesn't log successful vault logins at all. An attacker who gets in leaves zero trace in the application logs. Nginx access logs capture the HTTP requests which gives some trail, but there's no application level audit of what was actually accessed. Couldn't fix this, it's a Vaultwarden limitation. Filed a <a href="https://github.com/dani-garcia/vaultwarden/discussions/6953" target="_blank">GitHub discussion</a> proposing configurable audit logging and offered to contribute a PR in the future.</p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/Vaultwardendatafilessecuredtorootonly.png" alt="Vaultwarden Data Files Secured" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Vaultwarden db.sqlite3 and rsa_key.pem - Root Only (chmod 600)</div>
+                </div>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/vaultwardenadminpanelblockedexternally.png" alt="Vaultwarden Admin Panel Blocked Externally" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Vaultwarden /admin Panel Blocked from Internet Access</div>
+                </div>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/vaultwarden-adminpanelban.png" alt="Vaultwarden Admin Panel Fail2ban Jail" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Fail2ban Jail Configuration for Vaultwarden Admin Panel</div>
+                </div>
+
+                <h3>Nextcloud</h3>
+
+                <p><code>/status.php</code> was handing out the exact running version with zero authentication. Direct CVE lookup attack chain meaning hit the endpoint, get the version, search the database, know exactly what to try. Blocked via Nginx.</p>
+
+                <p>ImageMagick was the most critical finding. Three active CVEs including arbitrary code execution. Attack scenario: upload a malicious image, Nextcloud passes it to ImageMagick for thumbnail generation, code execution inside the container. Two mitigations layered. First, switched thumbnail generation to the GD library entirely so ImageMagick is no longer called for previews. Second, applied a security policy blocking formats like PS, EPS, PDF, SVG, MSL with resource limits of 256MB memory and 30 seconds processing time. I don't use these formats anyway. Made it persistent via a docker-compose volume mount so it survives container rebuilds. Verified both working.</p>
+
+                <p>No upload size limit meant an attacker could fill the 2TB SSD and take every container down. Set a 10GB file limit and 50GB user quota which I can change per my need.</p>
+
+                <p>Nextcloud sits on both Docker subnets because it needs to reach Nginx for incoming traffic and MariaDB for the database. That dual network presence means a compromised Nextcloud container can reach every other backend service directly. Documented as accepted risk, fixing it would require rearchitecting the network entirely.</p>
+
+                <h3>MariaDB</h3>
+
+                <p><code>root@%</code> existed with a default password. Remote root login possible from any host. Deleted it, set strong credentials, restricted the Nextcloud database user to the backend subnet only. <code>local_infile</code> disabled to prevent file read attacks via SQL. Binary logging enabled for tamper detection. Connection limits set to 50 max connections, 10 per user, 300 second timeout to prevent resource exhaustion.</p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/mariadbusernextcluodrestrictedtobackenddockernetworkonly.png" alt="MariaDB User Restricted to Backend Network" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: MariaDB Nextcloud User Restricted to Backend Docker Network Only</div>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="accepted-risks">
+                <div class="section-number">SECTION 06</div>
+                <h2>Accepted Risks</h2>
+
+                <p>Not everything got fixed and I had to accept it.</p>
+
+                <p><strong>UFW is not restricted to Cloudflare IPs only.</strong> The ideal hardening step here would be to whitelist only Cloudflare's IP ranges in UFW so nothing else can even reach port 80 and 443. I didn't do it because I'm on a university network with dynamic DHCP. Cloudflare's IP ranges also change occasionally. The defense in depth through other layers covers this well enough and I will change this once I get into a home network.</p>
+
+                <p><strong>MariaDB to Nextcloud connection is unencrypted internally.</strong> Traffic between those two containers is plain, no TLS. I accepted this because that traffic never leaves the machine, it stays inside the backend Docker network. I accepted this for now but it's a real gap, not a dismissed one.</p>
+
+                <p><strong><code>DAC_OVERRIDE</code> capability is still present</strong> on Nextcloud and Vaultwarden. Ideally every container runs with zero capabilities. In practice Nextcloud needs <code>DAC_OVERRIDE</code> to manage file permissions across different users and Vaultwarden needs it for similar reasons. Removing it breaks both services. I tried, documented it as a gap and moved on.</p>
+
+                <p><strong>VirtualBox is still installed on the host</strong> as this is my personal PC. I came to realize that every VirtualBox installation adds SUID binaries to the system and I have six of them. Each one is a potential privilege escalation vector if a vulnerability exists in any of them. The plan is to migrate to KVM which is built into the Linux kernel, needs no SUID binaries and is a significantly cleaner setup security wise.</p>
+
+                <p><strong>Watchtower automatically updates all container images</strong> which sounds like a good thing until you think about it from a supply chain perspective. If any upstream image gets compromised and a malicious update gets pushed, Watchtower pulls and runs it automatically with zero review. The proper fix is pinning images to specific SHA256 digests instead of pulling <code>latest</code> blindly. For a personal homelab I accepted the convenience tradeoff but it's a real risk I will be fixing soon.</p>
+
+                <div class="callout info">
+                    <div class="callout-title">Every one of these is documented</div>
+                    <p>Understood and either has a planned fix or a clear reason why the tradeoff is acceptable right now. Coming to this point in time, I became clear that securing this system 100% was just not possible and I had to move on accepting what I just could not do.</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="security-testing">
+                <div class="section-number">SECTION 07</div>
+                <h2>Security Testing — Real Results</h2>
+
+                <p>I ran automated tools against my system once I was done with STRIDE. This exposed my infrastructure through the lens of an attacker and I could close some more attack vectors.</p>
+
+                <h3>Port Scanning — Nmap</h3>
+
+                <p>First thing I did was scan my own public IP from outside.</p>
+
+                <pre><code>nmap -sS -A -p- &lt;public ip&gt;</code></pre>
+
+                <p>Every single port came back filtered. All 65535 of them. The university firewall is dropping everything inbound so from the internet, my server is essentially invisible. No open ports, no fingerprint, nothing to attack directly. Services are only reachable through the Cloudflare Tunnel which uses outbound connections.</p>
+
+                <p>Then I scanned localhost to see what was actually running:</p>
+
+                <pre><code>nmap -p- 127.0.0.1</code></pre>
+
+                <p>Open ports found:</p>
+
+                <pre><code><span class="redacted">[REDACTED]</span>  — SSH (expected, hardened)
+11434 — Ollama (localhost only)
+20241 — cloudflared metrics (localhost only)
+43565 — containerd API (localhost only)</code></pre>
+
+                <p>Everything else — 80, 443, 81, 3000, 8080, 8081, 9090 filtered by UFW. No unexpected services, nothing that shouldn't be there.</p>
+
+                <p>The bonus finding here was that Nmap reported my OS as Linux 5.0-5.7. My actual kernel is <span class="redacted">[REDACTED]</span> which we saw in kernel hardening section.</p>
+
+                <p>I also verified Ollama was properly isolated. From the host it's accessible on localhost. From inside a Docker container it times out completely. Different network namespace — <code>127.0.0.1</code> from a container isn't the same <code>127.0.0.1</code> as the host. Isolation confirmed.</p>
+
+                <h3>TLS Audit — testssl.sh</h3>
+
+                <pre><code>./testssl.sh --severity HIGH --fast https://nextcloud.vaultcabin.com</code></pre>
+
+                <p>Initial grade: <strong>B</strong></p>
+
+                <p>Not vulnerable to any of the major TLS CVEs — Heartbleed, POODLE, BEAST, CRIME, DROWN, FREAK, LOGJAM, ROBOT, SWEET32, RC4. All clean. Forward secrecy enabled. Certificate from Let's Encrypt, auto renewed by Cloudflare.</p>
+
+                <p>But two HIGH severity findings were capping the grade at B:</p>
+
+                <p><strong>TLS 1.0 and 1.1 still offered.</strong> These are old protocol versions with known attacks. No reason to keep them. Fixed in Cloudflare dashboard, minimum TLS version set to 1.2.</p>
+
+                <p><strong>HSTS missing.</strong> Without HSTS, SSL stripping is possible. Fixed — six month max-age with <code>includeSubDomains</code> configured in Cloudflare.</p>
+
+                <p>Two other findings worth noting:</p>
+
+                <p>PHP version leaking in <code>x-powered-by</code> header — fixed with <code>proxy_hide_header X-Powered-By</code> in Nginx.</p>
+
+                <p>CAA DNS record missing — meaning any certificate authority could technically issue a cert for vaultcabin.com. Added CAA records restricting issuance to Let's Encrypt only.</p>
+
+                <p>After fixes:</p>
+
+                <pre><code>server: cloudflare                                             ✅
+x-powered-by: GONE                                             ✅
+x-content-type-options: nosniff                                ✅
+strict-transport-security: max-age=15552000; includeSubDomains ✅</code></pre>
+
+                <p>Final grade: <strong>A</strong></p>
+
+                <h3>CVE Scanning — Trivy</h3>
+
+                <pre><code>sudo trivy image --severity HIGH,CRITICAL nextcloud:latest</code></pre>
+
+                <p>Ran this across every image in the stack. Results:</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Image</th>
+                            <th>HIGH</th>
+                            <th>CRITICAL</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>nextcloud:latest</td>
+                            <td>86</td>
+                            <td>0</td>
+                            <td>ImageMagick CVEs — mitigated</td>
+                        </tr>
+                        <tr>
+                            <td>mariadb:10.11</td>
+                            <td>4</td>
+                            <td>1</td>
+                            <td>gosu binary — very low impact</td>
+                        </tr>
+                        <tr>
+                            <td>vaultwarden:latest</td>
+                            <td>2</td>
+                            <td>0</td>
+                            <td>glibc — awaiting image rebuild</td>
+                        </tr>
+                        <tr>
+                            <td>nginx-proxy-manager</td>
+                            <td>165</td>
+                            <td>3</td>
+                            <td>basic-ftp CVE — awaiting rebuild</td>
+                        </tr>
+                        <tr>
+                            <td>prometheus:latest</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>Clean</td>
+                        </tr>
+                        <tr>
+                            <td>grafana:latest</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>Clean</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p>The Nextcloud ImageMagick CVEs were the most critical finding, three of them including arbitrary code execution. Already mitigated by switching to GD library and applying the security policy. The CVEs still show in the scan because ImageMagick is still present in the image, just no longer reachable through Nextcloud.</p>
+
+                <p>Nginx Proxy Manager had 168 CVEs total including 3 CRITICAL. The most concerning was CVE-2026-27699, a basic-ftp path traversal with a fix available but the NPM image hasn't been rebuilt yet. Watchtower will auto-update when it is.</p>
+
+                <p>Most of the remaining CVEs across all images showed status "affected" with no fix version available yet. Patches not released upstream. Documented, accepted, monitoring for image rebuilds.</p>
+
+                <p>The important distinction I learned here is the difference between "affected" and "fixed" status. Prioritised the fixed ones, document the affected ones as accepted risk until upstream catches up.</p>
+
+                <h3>Directory Fuzzing — ffuf</h3>
+
+                <pre><code>ffuf -w /usr/share/wordlists/dirb/common.txt -u https://nextcloud.vaultcabin.com/FUZZ</code></pre>
+
+                <p><strong>Nextcloud</strong> came back clean. No hidden endpoints, no exposed admin panels, no backup files, no <code>.git</code> directory. The only things responding were expected — <code>/login</code>, <code>index.php</code>, <code>robots.txt</code> which correctly had <code>Disallow: /</code> blocking all indexing.</p>
+
+                <p><strong>Vaultwarden</strong> had one finding:</p>
+
+                <pre><code>/admin    → 200</code></pre>
+
+                <p>The admin panel was publicly accessible. Protected by an argon2 hashed token and Fail2ban, but still reachable from the internet which means it's still an attack surface. Blocked it externally via Nginx, returns 404 now. Only accessible through SSH tunnel locally.</p>
+
+                <p>I knew the panel existed. I didn't think about whether it needed to be publicly reachable at all.</p>
+
+                <h3>Rate Limiting Verification</h3>
+
+                <p>Rate limiting zones were defined earlier but I wanted to verify they were actually working correctly. Sent repeated requests to the login endpoints and watched the responses.</p>
+
+                <p><strong>Nextcloud <code>/login</code>:</strong></p>
+
+                <pre><code>Requests 1-4:  200/303 — burst allowed
+Request 5+:    429 Too Many Requests ✅</code></pre>
+
+                <p><strong>Vaultwarden <code>/api/accounts/prelogin</code>:</strong></p>
+
+                <pre><code>Requests 1-4:  200 — burst allowed
+Request 5+:    429 Too Many Requests ✅</code></pre>
+
+                <p>Working as expected. Three layered defenses on every login endpoint i.e Nginx rate limiting, application built-in throttling and Fail2ban. An attacker has to get through all three before making any real progress on a brute force attempt.</p>
+
+                <div class="callout success">
+                    <div class="callout-title">The shift in perspective</div>
+                    <p>The most useful thing about this whole testing phase wasn't the individual findings. It was the shift in perspective. Things that looked fine from the inside look very different from the outside.</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="monitoring">
+                <div class="section-number">SECTION 08</div>
+                <h2>Monitoring and Alerting</h2>
+
+                <h3>Grafana Dashboards</h3>
+
+                <p>Three dashboards running. Node Exporter Full pulls host metrics from Prometheus. CPU per core, RAM, disk I/O, network traffic, system load. cAdvisor dashboard shows the same but per container, which container is eating memory, which is spiking CPU. The third is a custom security dashboard I built pulling from both Prometheus and Loki showing sudo commands run on the host, Fail2ban bans in real time, UFW blocked connections, Nextcloud failed logins and Vaultwarden admin panel attempts.</p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/grafananodexporterdashboard.png" alt="Grafana Node Exporter Dashboard" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Grafana Node Exporter Dashboard - Host Metrics</div>
+                </div>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/grafanfail2bandetectingbruteforcefrombackendcontainers.png" alt="Grafana Fail2ban Detecting Brute Force" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Grafana Dashboard - Fail2ban Detecting Brute Force from Backend Containers</div>
+                </div>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/Vaultcabinsecdashboard.png" alt="VaultCabin Security Dashboard Part 1" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: VaultCabin Custom Security Dashboard (Part 1)</div>
+                </div>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/Vaultcabinsecdashboard2.png" alt="VaultCabin Security Dashboard Part 2" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: VaultCabin Custom Security Dashboard (Part 2)</div>
+                </div>
+
+                <h3>Loki Log Pipeline</h3>
+
+                <pre><code>Log sources → Promtail → Loki → Grafana</code></pre>
+
+                <p>Promtail is collecting from ten sources — auth.log, fail2ban.log, ufw.log, Nginx access and error logs, Nextcloud, Vaultwarden, Grafana and all Docker containers. Everything lands in Loki, retained for 30 days. Before this, logs were scattered across individual containers with no way to correlate anything. Now it's all in one place and searchable.</p>
+
+                <h3>Alerts and Email Notifications</h3>
+
+                <p>Three alert rules wired to Gmail via SMTP:</p>
+
+                <ul>
+                    <li><strong>Disk usage above 80%</strong> — evaluates every minute, fires after 5 minutes sustained</li>
+                    <li><strong>Service down</strong> — any of cadvisor, node exporter or prometheus goes below 1, fires within a minute</li>
+                    <li><strong>Brute force detected</strong> — more than 10 failed auth attempts in 5 minutes, fires immediately</li>
+                </ul>
+
+                <p>First real test of the alerting was finding that Prometheus couldn't scrape itself after I added basic auth, it was firing the service down alert constantly until I added the credentials to its own scrape config.</p>
+                <div style="margin: 40px 0; text-align: center;">
+                    <img src="images/grafanaemailscreenshot.png" alt="Grafana Email Alert Notification" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--text-muted); margin-top: 12px;">Figure: Grafana Sending Email Alert Notifications via SMTP</div>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="still-broken">
+                <div class="section-number">SECTION 09</div>
+                <h2>What I Know Is Still Broken</h2>
+
+                <h3>Cloudflare Trust Dependency</h3>
+
+                <p>Every single byte of traffic in and out of this infrastructure passes through Cloudflare. TLS terminates there, they decrypt it, inspect it, re-encrypt it. I have no WAF, no DDoS protection and no ingress path without them. If Cloudflare goes down, everything goes down. If Cloudflare decides to terminate my account, everything goes down. If Cloudflare gets breached, my traffic was in their hands.</p>
+
+                <p>It's an architectural reality. I accepted it because I had no real alternative on a university network with no inbound connections and no capacity to run my own edge protection. But it's a single vendor dependency on the most critical part of the infrastructure.</p>
+
+                <p>Once I get into a home network, fix is a Wireguard VPN for direct access that removes the Cloudflare dependency for internal management at minimum.</p>
+
+                <h3>Logs Are Not Immutable</h3>
+
+                <p>Loki is storing 30 days of logs on the same machine it's monitoring. If an attacker compromises the host, the first thing a careful attacker does is delete the evidence. One <code>rm -rf</code> on the Loki data directory and 30 days of auth logs, Fail2ban bans, Nginx access logs, everything is gone. Breach investigation becomes impossible.</p>
+
+                <p>I learned that in a professional environment logs get shipped to a remote write once destination the moment they're generated. S3 with object lock, a managed SIEM, anything that exists outside the compromised machine. I don't have that. If this host gets owned, I'm investigating blind.</p>
+
+                <h3>Email Alerts</h3>
+
+                <p>Grafana is sending alerts to Gmail. Email is too slow, and my inbox feels flooded with spam. By the time I see a brute force alert in my inbox the attack might be over. Using Pushover, Gotify, a Telegram bot, Signal or something that actually interrupts you in real time would be ideal. This is on the to-do list.</p>
+
+                <h3>No Proactive OOM Alerting</h3>
+
+                <p>Resource limits are set on containers which is good. What's not good is that my alerting only tells me after a container gets OOM killed. By then the service is already down. I should have alerts firing when a container is approaching its memory limit — say 80% — not after it's already dead and users are getting errors. Current setup is reactive, not proactive which I have to work on.</p>
+
+                <h3>Watchtower Supply Chain Risk</h3>
+
+                <p>Watchtower automatically pulls and runs updated container images with no verification, no digest checking, no human review. The convenience is real but so is the risk. A compromised upstream maintainer account on Docker Hub pushing a malicious image update gets automatically deployed to my entire stack within hours. That's a supply chain attack with automatic execution built in.</p>
+
+                <p>The fix is image digest pinning — running <code>nextcloud@sha256:abc123</code> instead of <code>nextcloud:latest</code> so you're running exactly what you verified. Updates become a conscious decision instead of an automatic one. Haven't done this yet.</p>
+
+                <h3>MariaDB Unencrypted Internal Connection</h3>
+
+                <p>Traffic between Nextcloud and MariaDB is plain unencrypted SQL on the backend Docker network. The "it never leaves the machine" argument only goes so far. A compromised container on the same subnet with enough effort could position itself to read that traffic like password hashes, file metadata, session tokens, all in plaintext. TLS on the MariaDB connection is the fix. Accepted for now, documented as a real gap.</p>
+
+                <h3>Nextcloud Bridges Both Networks</h3>
+
+                <p>Nextcloud sits on both the selfhosted and backend subnets because it needs to receive traffic from Nginx and talk to MariaDB. That dual network presence means a compromised Nextcloud container has a foot in both worlds and can reach every other backend service directly. The network segmentation that's supposed to contain blast radius is partially defeated by this single architectural requirement. Fixing it properly would mean rearchitecting how Nextcloud talks to MariaDB, possibly through an API layer or a dedicated database proxy.</p>
+
+                <h3>No mTLS Between Internal Services</h3>
+
+                <p>Containers on the backend subnet talk to each other over plain HTTP with no mutual authentication. Any container that gets compromised can impersonate any other service on the network. mTLS would mean every container presents a certificate, every connection is mutually authenticated and encrypted, and a compromised container can't pretend to be MariaDB or Vaultwarden to another service. It's complex to implement properly in a Docker environment and overkill for a homelab but it's a real gap and I'm not going to pretend otherwise.</p>
+
+                <h3>DAC_OVERRIDE Still Present</h3>
+
+                <p>Nextcloud and Vaultwarden both still have the <code>DAC_OVERRIDE</code> Linux capability. This capability lets a process bypass file permission checks. In a compromised container, it means the attacker can read files they shouldn't have access to. I tried removing it. Both services broke. It's a known gap with no clean fix available without upstream changes.</p>
+
+                <h3>VirtualBox SUID Binaries</h3>
+
+                <p>VirtualBox is still installed on the host and adds six SUID binaries to the system. SUID binaries run with elevated privileges regardless of who executes them. A vulnerability in any of those six is a local privilege escalation path to root. Migration to KVM is planned — it's kernel native, needs no SUID binaries and is architecturally cleaner. Just hasn't happened yet.</p>
+
+                <div class="callout">
+                    <p>They're things I found, understood, documented and either couldn't fix within the scope of this project, am still working on to fix or made a conscious tradeoff decision about it.</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="learned">
+                <div class="section-number">SECTION 10</div>
+                <h2>What I Learned</h2>
+
+                <p>I came into this project thinking I had a decent grasp on security. The gap between knowing and doing turned out to be larger than I expected. I became clear on the concepts that defaults are made to "Just work and not break" and not secure, Security is clearly a process and not a state and it is truly impossible to completely secure a system. You can never reach a complete secure state and that is the truth. STRIDE before attacking my system already helped me minimize 90% of the attack vectors that I closed and the rest came from actually pentesting it.</p>
+
+                <p>For anyone thinking of self hosting a cloud, <strong>Do it. But Do it Seriously.</strong> The truth I realized is that it isn't always better than using managed services. You won't end up perfectly securing the system. But, building it, realizing the gaps, patching it, breaking it and patching it again all that leading to realize you can never truly secure it and have to accept the tradeoff.</p>
+
+                <p><strong>Just don't leave it on defaults.</strong></p>
+            </section>
+
+            <hr>
+
+            <section id="references">
+                <div class="section-number">REFERENCES</div>
+                <h2>References and Tools Used</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tool</th>
+                            <th>Purpose</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Nmap</td>
+                            <td>Port scanning</td>
+                            <td><a href="https://nmap.org" target="_blank">nmap.org</a></td>
+                        </tr>
+                        <tr>
+                            <td>testssl.sh</td>
+                            <td>TLS audit</td>
+                            <td><a href="https://testssl.sh" target="_blank">testssl.sh</a></td>
+                        </tr>
+                        <tr>
+                            <td>Trivy</td>
+                            <td>CVE scanning</td>
+                            <td><a href="https://aquasecurity.github.io/trivy" target="_blank">aquasecurity.github.io/trivy</a></td>
+                        </tr>
+                        <tr>
+                            <td>ffuf</td>
+                            <td>Directory fuzzing</td>
+                            <td><a href="https://github.com/ffuf/ffuf" target="_blank">github.com/ffuf/ffuf</a></td>
+                        </tr>
+                        <tr>
+                            <td>Restic</td>
+                            <td>Encrypted backups</td>
+                            <td><a href="https://restic.net" target="_blank">restic.net</a></td>
+                        </tr>
+                        <tr>
+                            <td>Fail2ban</td>
+                            <td>Intrusion prevention</td>
+                            <td><a href="https://fail2ban.org" target="_blank">fail2ban.org</a></td>
+                        </tr>
+                        <tr>
+                            <td>Excalidraw</td>
+                            <td>Architecture diagrams</td>
+                            <td><a href="https://excalidraw.com" target="_blank">excalidraw.com</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <blockquote>
+                    Do it Seriously.Just Don't leave it on defaults.
+                </blockquote>
+            </section>
+        </article>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 sanskar — blog.vaultcabin.com</p>
+            <p style="margin-top: 8px;">Built with security in mind, accepted risks documented.</p>
+        </div>
+    </footer>
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+        // Scroll progress bar
+        window.addEventListener('scroll', () => {
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollPercent = (scrollTop / (documentHeight - windowHeight)) * 100;
+            document.getElementById('progressBar').style.width = scrollPercent + '%';
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
